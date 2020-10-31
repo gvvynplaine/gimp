@@ -161,6 +161,7 @@ load_image (GFile        *file,
   gint               max_row            = 0;
   gint               max_col            = 0;
   gboolean           save_transp_pixels = FALSE;
+  GimpColorProfile  *first_profile      = NULL;
   gint               li;
 
   *image = NULL;
@@ -344,8 +345,20 @@ load_image (GFile        *file,
       TIFFGetFieldDefaulted (tif, TIFFTAG_SAMPLEFORMAT, &sampleformat);
 
       profile = load_profile (tif);
+      if (! profile)
+        {
+          profile = first_profile;
+        }
+
       if (profile)
         {
+          if (! first_profile)
+            first_profile = profile;
+          else if (pages.target != GIMP_PAGE_SELECTOR_TARGET_IMAGES && first_profile != profile)
+            {
+              g_message (_("This image has multiple color profiles. Using the first one."));
+            }
+
           if (! *image)
             *profile_loaded = TRUE;
 
@@ -836,11 +849,13 @@ load_image (GFile        *file,
         }
 
       /* attach color profile */
-
       if (profile)
         {
-          gimp_image_set_color_profile (*image, profile);
-          g_object_unref (profile);
+          if (pages.target == GIMP_PAGE_SELECTOR_TARGET_IMAGES || profile == first_profile)
+            gimp_image_set_color_profile (*image, profile);
+
+          if (profile != first_profile)
+            g_object_unref (profile);
         }
 
       /* attach parasites */
@@ -1218,6 +1233,7 @@ load_image (GFile        *file,
 
       gimp_progress_update (1.0);
     }
+    g_object_unref (first_profile);
 
   if (pages.target == GIMP_PAGE_SELECTOR_TARGET_IMAGES)
     {
